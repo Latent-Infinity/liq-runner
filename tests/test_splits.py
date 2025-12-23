@@ -1,0 +1,14 @@
+from liq.runner.splits import blocked_splits, rolling_splits
+
+
+def test_rolling_splits_advances() -> None:
+    splits = list(rolling_splits(n=10, train_size=4, valid_size=2, step=2))
+    assert len(splits) >= 1
+    assert splits[0].train == slice(0, 4)
+    assert splits[0].valid == slice(4, 6)
+
+
+def test_blocked_splits_partition() -> None:
+    splits = list(blocked_splits(n=10, k=3))
+    assert splits[0].valid == slice(0, 3)
+    assert splits[-1].valid.stop == 10
