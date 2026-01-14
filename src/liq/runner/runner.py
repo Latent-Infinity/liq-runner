@@ -115,7 +115,14 @@ def run_rolling(
 
         def _vc(series: pl.Series) -> dict:
             vc = series.value_counts().to_dict(as_series=False)
-            return {int(lbl): int(cnt) for lbl, cnt in zip(vc["label"], vc["count"])} if vc else {}
+            if not vc:
+                return {}
+            value_key = "label" if "label" in vc else ("value" if "value" in vc else next(iter(vc)))
+            count_key = "count" if "count" in vc else next(k for k in vc if k != value_key)
+            return {
+                int(lbl): int(cnt)
+                for lbl, cnt in zip(vc[value_key], vc[count_key], strict=False)
+            }
 
         logger.info(
             "label_balance",
@@ -136,8 +143,11 @@ def run_rolling(
             sim_df = valid_df.slice(calib_size, len(valid_df) - calib_size)
             signal_output_calib = strategy.predict(calib_df)
             calib = calibrate_signal_output(signal_output_calib)
+            calib_labels_used = (
+                signal_output_calib.labels if signal_output_calib.labels is not None else calib_labels
+            )
             diag = select_threshold(
-                SignalOutput(scores=calib.scores, labels=signal_output_calib.labels or calib_labels),
+                SignalOutput(scores=calib.scores, labels=calib_labels_used),
                 min_precision=threshold_cfg.get("precision_min"),
                 min_recall=threshold_cfg.get("recall_min"),
                 min_trades=threshold_cfg.get("min_trades_per_window"),
@@ -151,8 +161,9 @@ def run_rolling(
         else:
             signal_output = strategy.predict(valid_df)
             calib = calibrate_signal_output(signal_output)
+            valid_labels_used = signal_output.labels if signal_output.labels is not None else valid_labels
             diag = select_threshold(
-                SignalOutput(scores=calib.scores, labels=signal_output.labels or valid_labels),
+                SignalOutput(scores=calib.scores, labels=valid_labels_used),
                 min_precision=threshold_cfg.get("precision_min"),
                 min_recall=threshold_cfg.get("recall_min"),
                 min_trades=threshold_cfg.get("min_trades_per_window"),
@@ -213,10 +224,10 @@ def run_rolling(
             signals = signals[:top_signals]
         logger.debug("calibration_threshold", extra={"threshold": diag.threshold, "ev": diag.expected_value})
         risk_result = risk_engine.process_signals(
-            signals=signals,
-            portfolio_state=portfolio,
-            market_state=market_state,
-            risk_config=risk_config,
+            signals,
+            portfolio,
+            market_state,
+            risk_config,
         )
         orders = list(risk_result.orders)
         long_signals = sum(1 for s in signals if getattr(s, "direction", "") == "long")

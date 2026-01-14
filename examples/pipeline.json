@@ -1,0 +1,70 @@
+{
+  "name": "ssl_finetune",
+  "artifact_root": "artifacts",
+  "stages": [
+    {
+      "name": "ingest",
+      "description": "Ingest and normalize raw data",
+      "inputs": [],
+      "outputs": ["raw_candles"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "features",
+      "description": "Build feature dataframe",
+      "inputs": ["raw_candles"],
+      "outputs": ["features"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "datasets",
+      "description": "Windowing + holdout split",
+      "inputs": ["features"],
+      "outputs": ["ssl_windows", "supervised_windows"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "pretrain",
+      "description": "JEPA self-supervised pretrain",
+      "inputs": ["ssl_windows"],
+      "outputs": ["backbone_checkpoint"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "finetune",
+      "description": "Supervised finetune heads",
+      "inputs": ["supervised_windows", "backbone_checkpoint"],
+      "outputs": ["model_checkpoint"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "eval_dev",
+      "description": "Evaluate on dev holdout",
+      "inputs": ["model_checkpoint"],
+      "outputs": ["dev_metrics"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "eval_lockbox",
+      "description": "Evaluate on lockbox holdout",
+      "inputs": ["model_checkpoint"],
+      "outputs": ["lockbox_metrics"],
+      "enabled": true,
+      "config": {}
+    },
+    {
+      "name": "publish",
+      "description": "Publish model and metadata",
+      "inputs": ["model_checkpoint", "dev_metrics", "lockbox_metrics"],
+      "outputs": ["registry_entry"],
+      "enabled": true,
+      "config": {}
+    }
+  ]
+}
