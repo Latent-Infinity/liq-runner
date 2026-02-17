@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Iterable, Any, Callable
+from typing import Any
 
+from liq.runner.drift_manager import DriftAction, DriftManager
 from liq.runner.pipeline_manager import PipelineManager, PipelineState
-from liq.runner.drift_manager import DriftManager, DriftAction
 
 
 @dataclass

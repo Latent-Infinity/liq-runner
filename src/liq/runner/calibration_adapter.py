@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from liq.signals.output import SignalOutput
-from liq.sim.calibration import CalibrationResult, ThresholdDiagnostics, ev_threshold_search, temperature_scale
+from liq.sim.calibration import (
+    CalibrationResult,
+    ThresholdDiagnostics,
+    ev_threshold_search,
+    temperature_scale,
+)
 
 
 @dataclass(frozen=True)

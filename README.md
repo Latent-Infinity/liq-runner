@@ -46,7 +46,7 @@ for fold in results:
 Use the CLI to validate pipeline specs and preview stage order without running any model code.
 
 ```bash
-python -m liq.runner.cli --spec examples/pipeline.json --dry-run --print-hash
+uv run python -m liq.runner.cli --spec examples/pipeline.json --dry-run --print-hash
 ```
 
 See `examples/rolling_runner_example.py` for a runnable end-to-end dummy wiring.

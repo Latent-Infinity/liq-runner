@@ -1,17 +1,17 @@
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime, UTC
-from uuid import UUID
 from types import SimpleNamespace
+from uuid import UUID
 
 import polars as pl
+
 from liq.core import Bar, OrderRequest, OrderSide, OrderType, PortfolioState
 from liq.core.fill import Fill
-
+from liq.risk.config import RiskConfig
 from liq.runner.runner import run_rolling
-from liq.risk.config import RiskConfig, MarketState
+from liq.signals.output import SignalOutput
 from liq.sim.config import ProviderConfig, SimulatorConfig
 from liq.sim.simulator import Simulator
-from liq.signals.output import SignalOutput
 
 
 class DummyStrategy:

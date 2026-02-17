@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Callable, Iterable, Protocol
-from datetime import datetime, timezone
+from typing import Any, Protocol, cast
 
 import polars as pl
 
-from liq.runner.calibration_adapter import calibrate_signal_output, select_threshold
-from liq.runner.splits import rolling_splits
-from liq.signals.output import SignalOutput
-from liq.signals import Signal
-from liq.sim.config import SimulatorConfig
-from liq.sim.simulator import SimulationResult, Simulator
-from liq.metrics import summarize_qa
 from liq.core import Bar, OrderRequest, PortfolioState
 from liq.core.fill import Fill
+from liq.metrics import summarize_qa
+from liq.risk.config import MarketState, RiskConfig
 from liq.risk.engine import RiskEngine
-from liq.risk.config import RiskConfig, MarketState
-import logging
+from liq.runner.calibration_adapter import calibrate_signal_output, select_threshold
+from liq.runner.splits import rolling_splits
+from liq.signals import Signal
+from liq.signals.output import SignalOutput
+from liq.sim.config import SimulatorConfig
+from liq.sim.simulator import SimulationResult, Simulator
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def run_rolling(
         # minimal market/portfolio shims; real runner should hydrate properly
         bars = list(bars_provider.get_bars(bar_slice))
         train_bars = list(bars_provider.get_bars(split.train))
-        ts = bars[0].timestamp if bars else datetime.now(timezone.utc)
+        ts = bars[0].timestamp if bars else datetime.now(UTC)
         current_bar = bars[0] if bars else None
         current_symbol = current_bar.symbol if current_bar else ""
         # Simple volatility proxy: ATR-like range over last 20 bars
@@ -193,7 +194,6 @@ def run_rolling(
             if trs:
                 vol_val = sum(trs) / len(trs)
         market_state = MarketState(
-            marks={},
             current_bars={current_symbol: current_bar} if current_bar else {},
             volatility={current_symbol: Decimal(str(vol_val)) if vol_val else Decimal("0.01")} if current_symbol else {},
             liquidity={},
@@ -209,12 +209,12 @@ def run_rolling(
             else diag.threshold if diag and diag.threshold is not None else 0.5
         )
         scores_iter = signal_output.scores if signal_output is not None else []
-        for bar, score in zip(bars, scores_iter):
+        for bar, score in zip(bars, scores_iter, strict=False):
             side = "long" if score >= threshold else "flat"
             signals.append(
                 Signal(
                     symbol=bar.symbol,
-                    direction=side,  # type: ignore[arg-type]
+                    direction=side,
                     strength=float(score),
                     timestamp=bar.timestamp,
                 )
@@ -250,7 +250,7 @@ def run_rolling(
                     record = getattr(constraint, "record_trade", None)
                     if callable(record):
                         record(fill.symbol, fill.timestamp, fill.side, fill.quantity)
-        metrics = summarize_qa(sim_result)
+        metrics = summarize_qa(cast(Any, sim_result))
         logger.info(
             "fold_result",
             extra={

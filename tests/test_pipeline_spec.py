@@ -1,9 +1,9 @@
 import pytest
 
 from liq.runner.pipeline_spec import (
+    PipelineRunState,
     PipelineSpec,
     PipelineStageSpec,
-    PipelineRunState,
     compute_config_hash,
     default_pipeline,
     dry_run_steps,

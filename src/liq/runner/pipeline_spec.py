@@ -31,7 +31,7 @@ class PipelineStageSpec:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PipelineStageSpec":
+    def from_dict(cls, payload: dict[str, Any]) -> PipelineStageSpec:
         return cls(
             name=str(payload["name"]),
             description=str(payload.get("description", "")),
@@ -71,7 +71,7 @@ class PipelineSpec:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "PipelineSpec":
+    def from_dict(cls, payload: dict[str, Any]) -> PipelineSpec:
         stages = [PipelineStageSpec.from_dict(item) for item in payload.get("stages", [])]
         return cls(
             name=str(payload["name"]),

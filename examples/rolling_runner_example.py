@@ -1,16 +1,16 @@
 """Example showing rolling runner wiring with dummy components."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import polars as pl
 
 from liq.core import Bar, OrderRequest, OrderSide, OrderType, PortfolioState
-from liq.runner.runner import run_rolling
 from liq.risk.config import RiskConfig
+from liq.runner.runner import run_rolling
+from liq.signals.output import SignalOutput
 from liq.sim.config import ProviderConfig, SimulatorConfig
 from liq.sim.simulator import Simulator
-from liq.signals.output import SignalOutput
 
 
 class ExampleStrategy:
@@ -71,7 +71,7 @@ def example_sim_factory() -> Simulator:
 
 
 def build_bars() -> list[Bar]:
-    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
     return [
         Bar(
             symbol="BTC_USDT",
@@ -96,7 +96,7 @@ def main() -> None:
         risk_engine=ExampleRiskEngine(),
         simulator_factory=example_sim_factory,
         bars_provider=ExampleBars(build_bars()),
-        portfolio_provider=ExamplePortfolioProvider(datetime(2024, 1, 1, tzinfo=timezone.utc)),
+        portfolio_provider=ExamplePortfolioProvider(datetime(2024, 1, 1, tzinfo=UTC)),
         risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,

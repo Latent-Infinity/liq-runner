@@ -39,12 +39,20 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.14",
-    "mypy>=1.13",
+    "ty>=0.0.1",
 ]
 
 [project.urls]
 Homepage = "https://github.com/Latent-Infinity/liq-runner"
 Repository = "https://github.com/Latent-Infinity/liq-runner"
+
+[tool.uv]
+[tool.uv.sources]
+liq-core = { path = "../liq-core", editable = true }
+liq-metrics = { path = "../liq-metrics", editable = true }
+liq-risk = { path = "../liq-risk", editable = true }
+liq-signals = { path = "../liq-signals", editable = true }
+liq-sim = { path = "../liq-sim", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/liq"]
@@ -67,15 +75,19 @@ exclude_lines = [
     "pass",
 ]
 
-[tool.mypy]
-python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_ignores = true
-disallow_untyped_defs = true
-mypy_path = "src"
-namespace_packages = true
-explicit_package_bases = true
+[tool.ty.environment]
+extra-paths = [
+    "./src",
+    "../liq-core/src",
+    "../liq-data/src",
+    "../liq-metrics/src",
+    "../liq-risk/src",
+    "../liq-signals/src",
+    "../liq-sim/src",
+    "../liq-store/src",
+]
+
+[tool.ty.rules]
 
 [tool.ruff]
 line-length = 100

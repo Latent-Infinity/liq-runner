@@ -7,7 +7,7 @@ class DummyPipeline:
         self.fitted = True
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, _data):
         return cls()
 
     def transform(self, series):
