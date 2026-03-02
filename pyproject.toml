@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "liq-runner"
-version = "0.1.0"
+version = "0.1.1"
 description = "Pipeline orchestration and rolling-run utilities for the LIQ Stack"
 readme = "README.md"
 license = "MIT"
@@ -23,11 +23,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "liq-core>=0.1.0",
-    "liq-metrics>=0.1.0",
-    "liq-risk>=0.1.0",
-    "liq-signals>=0.1.0",
-    "liq-sim>=0.1.0",
+    "liq-core>=0.1.1",
+    "liq-metrics>=0.1.1",
+    "liq-datasets>=0.1.2",
+    "liq-risk>=0.1.2",
+    "liq-signals>=0.1.1",
+    "liq-sim>=0.1.1",
     "polars>=0.20",
 ]
 
@@ -50,6 +51,7 @@ Repository = "https://github.com/Latent-Infinity/liq-runner"
 [tool.uv.sources]
 liq-core = { path = "../liq-core", editable = true }
 liq-metrics = { path = "../liq-metrics", editable = true }
+liq-datasets = { path = "../liq-datasets", editable = true }
 liq-risk = { path = "../liq-risk", editable = true }
 liq-signals = { path = "../liq-signals", editable = true }
 liq-sim = { path = "../liq-sim", editable = true }
@@ -80,6 +82,7 @@ extra-paths = [
     "./src",
     "../liq-core/src",
     "../liq-data/src",
+    "../liq-datasets/src",
     "../liq-metrics/src",
     "../liq-risk/src",
     "../liq-signals/src",

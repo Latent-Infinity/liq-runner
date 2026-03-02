@@ -65,3 +65,18 @@ orch = Orchestrator(FeaturePipeline.from_dict)
 ctx = PipelineState(data=FeaturePipeline(model_type="nn").fit_transform([1,2,3]) or {})  # placeholder state
 drift_action = orch.evaluate_drift([0.3])
 ```
+
+## Operational Notes (Phase 6 hardening)
+
+- `run_rolling` validates fold geometry (`train_size`, `valid_size`, `step`) and
+  enforces deterministic `FoldResult.slice_id` propagation to downstream fitness
+  caches.
+- `fold.slice_id` is used directly by the evolution cache key; mismatched split
+  generation between runner and evaluator is treated as an integration bug and should
+  surface as cache misses or explicit contract violations.
+- Strategy pipeline errors are normalized into runner-level exceptions:
+  - missing bars/features for a fold
+  - invalid risk/sizing output
+  - failed strategy fitting/prediction
+- For drift events, pipeline state should be regenerated before continuing with stale
+  strategy snapshots.

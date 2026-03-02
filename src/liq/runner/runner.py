@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -13,6 +13,7 @@ import polars as pl
 
 from liq.core import Bar, OrderRequest, PortfolioState
 from liq.core.fill import Fill
+from liq.datasets import WalkForwardSplit
 from liq.metrics import summarize_qa
 from liq.risk.config import MarketState, RiskConfig
 from liq.risk.engine import RiskEngine
@@ -24,6 +25,7 @@ from liq.sim.config import SimulatorConfig
 from liq.sim.simulator import SimulationResult, Simulator
 
 logger = logging.getLogger(__name__)
+SLICE_ID_PREFIX = "time_window"
 
 
 class Strategy(Protocol):
@@ -78,6 +80,8 @@ class FoldResult:
     oos_start: datetime | None
     oos_end: datetime | None
     constraint_violations: dict | None = None
+    slice_id: str | None = None
+    split_metadata: dict | None = None
 
 
 def run_rolling(
@@ -95,6 +99,7 @@ def run_rolling(
     sim_config: SimulatorConfig | None = None,
     threshold_cfg: dict | None = None,
     calibration_split: float | None = None,
+    splits: Sequence[WalkForwardSplit] | None = None,
 ) -> list[FoldResult]:
     """Simple rolling loop over features/labels."""
     threshold_cfg = threshold_cfg or {}
@@ -103,16 +108,87 @@ def run_rolling(
     ev_cost_bps = threshold_cfg.get("ev_cost_bps")
     target_ev = -(ev_cost_bps / 10000) if ev_cost_bps else None
     calib_frac = calibration_split or threshold_cfg.get("calibration_split") or 0.0
+
+    def _slice_bounds(window: slice) -> tuple[int, int]:
+        start = 0 if window.start is None else int(window.start)
+        stop = len(features) if window.stop is None else int(window.stop)
+        start = max(0, min(start, len(features)))
+        stop = max(start, min(stop, len(features)))
+        return start, stop - start
+
+    def _serialize_slice(window: slice) -> dict[str, int | None]:
+        return {
+            "start": None if window.start is None else int(window.start),
+            "stop": None if window.stop is None else int(window.stop),
+        }
+
+    def _fallback_slice_id(split: WalkForwardSplit) -> str:
+        if split.slice_id and split.slice_id != "time_window:auto":
+            return split.slice_id
+
+        return (
+            f"{SLICE_ID_PREFIX}:"
+            f"train={_serialize_slice(split.train)['start']}-{_serialize_slice(split.train)['stop']}"
+            f"|validate={_serialize_slice(split.validate)['start']}-{_serialize_slice(split.validate)['stop']}"
+            f"|test={_serialize_slice(split.test)['start']}-{_serialize_slice(split.test)['stop']}"
+        )
+
+    if splits is not None:
+        fold_specs = []
+        for split in splits:
+            if not isinstance(split, WalkForwardSplit):
+                raise TypeError("splits must contain WalkForwardSplit instances")
+            if not isinstance(split.train, slice) or not isinstance(split.validate, slice) or not isinstance(
+                split.test, slice
+            ):
+                raise TypeError(
+                    "walk-forward splits must be resolved to integer slices before run_rolling; convert datetime boundaries first"
+                )
+            fold_split_id = _fallback_slice_id(split)
+            fold_specs.append(
+                (
+                    split.train,
+                    split.validate,
+                    split.test,
+                    fold_split_id,
+                    {
+                        "split_type": "WalkForwardSplit",
+                        "slice_id": fold_split_id,
+                        "train": _serialize_slice(split.train),
+                        "validate": _serialize_slice(split.validate),
+                        "test": _serialize_slice(split.test),
+                        "lockbox": _serialize_slice(split.lockbox) if split.lockbox is not None else None,
+                        "embargo_bars": split.embargo_bars,
+                    },
+                )
+            )
+    else:
+        fold_specs = [
+            (legacy_split.train, legacy_split.valid, legacy_split.valid, None, None)
+            for legacy_split in rolling_splits(
+                n=len(features), train_size=train_size, valid_size=valid_size, step=step
+            )
+        ]
+
     results: list[FoldResult] = []
-    for split in rolling_splits(n=len(features), train_size=train_size, valid_size=valid_size, step=step):
+    for train_window, validate_window, test_window, split_id, split_metadata in fold_specs:
         logger.info(
             "rolling_split",
-            extra={"train": (split.train.start, split.train.stop), "valid": (split.valid.start, split.valid.stop)},
+            extra={
+                "train": (train_window.start, train_window.stop),
+                "validate": (validate_window.start, validate_window.stop),
+                "test": (test_window.start, test_window.stop),
+                "slice_id": split_id,
+            },
         )
-        train_df = features.slice(split.train.start, split.train.stop - split.train.start)
-        valid_df = features.slice(split.valid.start, split.valid.stop - split.valid.start)
-        train_labels = labels.slice(split.train.start, split.train.stop - split.train.start)
-        valid_labels = labels.slice(split.valid.start, split.valid.stop - split.valid.start)
+        train_offset, train_length = _slice_bounds(train_window)
+        validate_offset, validate_length = _slice_bounds(validate_window)
+        test_offset, test_length = _slice_bounds(test_window)
+        train_df = features.slice(train_offset, train_length)
+        validate_df = features.slice(validate_offset, validate_length)
+        test_df = features.slice(test_offset, test_length)
+        train_labels = labels.slice(train_offset, train_length)
+        validate_labels = labels.slice(validate_offset, validate_length)
 
         def _vc(series: pl.Series) -> dict:
             vc = series.value_counts().to_dict(as_series=False)
@@ -129,19 +205,19 @@ def run_rolling(
             "label_balance",
             extra={
                 "train_counts": _vc(train_labels),
-                "valid_counts": _vc(valid_labels),
+                "valid_counts": _vc(validate_labels),
             },
         )
 
         strategy.fit(train_df, train_labels)
-        calib_size = int(len(valid_df) * calib_frac) if calib_frac > 0 else 0
-        if calib_frac > 0 and calib_size == 0 and len(valid_df) > 0:
+        calib_size = int(len(validate_df) * calib_frac) if calib_frac > 0 else 0
+        if calib_frac > 0 and calib_size == 0 and len(validate_df) > 0:
             calib_size = 1
 
-        if calib_size > 0:
-            calib_df = valid_df.slice(0, calib_size)
-            calib_labels = valid_labels.slice(0, calib_size)
-            sim_df = valid_df.slice(calib_size, len(valid_df) - calib_size)
+        if calib_size > 0 and len(validate_df) > 0:
+            calib_df = validate_df.slice(0, calib_size)
+            calib_labels = validate_labels.slice(0, calib_size)
+            sim_df = test_df
             signal_output_calib = strategy.predict(calib_df)
             calib = calibrate_signal_output(signal_output_calib)
             calib_labels_used = (
@@ -158,11 +234,12 @@ def run_rolling(
             temp = calib.params.get("temperature", 1.0) if hasattr(calib, "params") else 1.0
             calibrated_scores = (signal_output.scores / temp).clip(0.0, 1.0)
             signal_output = SignalOutput(scores=calibrated_scores, labels=signal_output.labels)
-            bar_slice = slice(split.valid.start + calib_size, split.valid.stop)
+            bar_slice = test_window
         else:
-            signal_output = strategy.predict(valid_df)
+            signal_source = test_df if len(test_df) > 0 else validate_df
+            signal_output = strategy.predict(signal_source)
             calib = calibrate_signal_output(signal_output)
-            valid_labels_used = signal_output.labels if signal_output.labels is not None else valid_labels
+            valid_labels_used = signal_output.labels if signal_output.labels is not None else validate_labels
             diag = select_threshold(
                 SignalOutput(scores=calib.scores, labels=valid_labels_used),
                 min_precision=threshold_cfg.get("precision_min"),
@@ -170,11 +247,11 @@ def run_rolling(
                 min_trades=threshold_cfg.get("min_trades_per_window"),
                 target_ev=target_ev,
             )
-            bar_slice = split.valid
+            bar_slice = test_window
 
         # minimal market/portfolio shims; real runner should hydrate properly
         bars = list(bars_provider.get_bars(bar_slice))
-        train_bars = list(bars_provider.get_bars(split.train))
+        train_bars = list(bars_provider.get_bars(train_window))
         ts = bars[0].timestamp if bars else datetime.now(UTC)
         current_bar = bars[0] if bars else None
         current_symbol = current_bar.symbol if current_bar else ""
@@ -199,7 +276,7 @@ def run_rolling(
             liquidity={},
             timestamp=ts,
         )
-        portfolio = portfolio_provider.get_portfolio(split.valid)
+        portfolio = portfolio_provider.get_portfolio(test_window)
         # Wrap scores into signals for risk engine; here we use threshold as a simple long/flat filter
         # Build signals aligned to the validation bars using the calibrated scores.
         signals: list[Signal] = []
@@ -290,6 +367,8 @@ def run_rolling(
                 oos_start=oos_start_ts,
                 oos_end=oos_end_ts,
                 constraint_violations=getattr(risk_result, "constraint_violations", {}),
+                slice_id=split_id,
+                split_metadata=split_metadata,
             )
         )
     return results
