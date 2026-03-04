@@ -66,7 +66,7 @@ ctx = PipelineState(data=FeaturePipeline(model_type="nn").fit_transform([1,2,3])
 drift_action = orch.evaluate_drift([0.3])
 ```
 
-## Operational Notes (Phase 6 hardening)
+## Operational Notes (Stage 6 hardening)
 
 - `run_rolling` validates fold geometry (`train_size`, `valid_size`, `step`) and
   enforces deterministic `FoldResult.slice_id` propagation to downstream fitness
