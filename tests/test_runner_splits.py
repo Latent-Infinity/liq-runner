@@ -125,11 +125,21 @@ def dummy_simulator_factory():
 class RiskResult:
     """Simple simulation-time risk output with explicit constraints."""
 
-    def __init__(self, orders, *, constraints: dict[str, float] | None = None):
+    def __init__(
+        self,
+        orders,
+        *,
+        constraints: dict[str, float] | None = None,
+        rejected_signals=None,
+        sizing_rejections: dict[str, list[str]] | None = None,
+        constraint_diagnostics: dict[str, dict[str, object]] | None = None,
+    ):
         self.orders = orders
         self.constraint_violations = constraints or {}
+        self.constraint_diagnostics = constraint_diagnostics or {}
+        self.sizing_rejections = sizing_rejections or {}
 
-        self.rejected_signals = []
+        self.rejected_signals = [] if rejected_signals is None else rejected_signals
         self.rejected_orders = []
         self.processed_signals = []
 
@@ -165,10 +175,15 @@ def test_run_rolling_returns_fold_results() -> None:
     labels = pl.Series([0, 1, 0, 1, 0, 1])
     ts = datetime(2024, 1, 1, tzinfo=UTC)
     # capture logs
-    records = []
     import logging
-    handler = logging.StreamHandler()
-    handler.emit = lambda record: records.append(record)
+
+    records: list[logging.LogRecord] = []
+
+    class ListHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = ListHandler()
     logger = logging.getLogger("liq.runner.runner")
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
@@ -180,7 +195,7 @@ def test_run_rolling_returns_fold_results() -> None:
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -194,6 +209,246 @@ def test_run_rolling_returns_fold_results() -> None:
     assert any("rolling_split" in rec.getMessage() for rec in records)
     assert any("fold_result" in rec.getMessage() for rec in records)
     logger.removeHandler(handler)
+
+
+class NoOrderSimulator:
+    def __init__(self) -> None:
+        self.config = SimulatorConfig()
+
+    def run(self, orders, bars):
+        return SimpleNamespace(
+            fills=[],
+            rejected_orders=[],
+            funding_charged=Decimal("0"),
+            slippage_stats={},
+            missing_ratio=0.0,
+            zero_volume_ratio=0.0,
+            ohlc_inconsistencies=0,
+            extreme_moves=0,
+            negative_volume=0,
+            non_monotonic_ts=0,
+        )
+
+
+def no_order_simulator_factory():
+    return NoOrderSimulator()
+
+
+class ThresholdScoreStrategy:
+    def __init__(self, scores: list[float]) -> None:
+        self._scores = scores
+
+    def fit(self, features: pl.DataFrame, labels: pl.Series | None = None) -> None:
+        self._labels = labels
+
+    def predict(self, features: pl.DataFrame) -> SignalOutput:
+        return SignalOutput(
+            scores=pl.Series(self._scores[: len(features)]),
+            labels=pl.Series([0] * len(features)),
+        )
+
+
+def test_run_rolling_sends_only_actionable_signals_to_risk() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class RejectingRiskEngine:
+        def __init__(self) -> None:
+            self.received_directions: list[str] = []
+
+        def process_signals(self, signals, portfolio, market, config):
+            self.received_directions = [signal.direction for signal in signals]
+            return RiskResult([], constraints={}, rejected_signals=list(signals))
+
+    risk_engine = RejectingRiskEngine()
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=ThresholdScoreStrategy([0.9, 0.1]),
+        risk_engine=risk_engine,
+        simulator_factory=no_order_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={"fixed_threshold": 0.5},
+    )
+
+    assert risk_engine.received_directions == ["long"]
+    assert results[0].signals_generated == 2
+    assert results[0].risk_rejected == 1
+    assert results[0].diagnostics["long_signals"] == 1
+
+
+def test_run_rolling_sends_strongest_actionable_signal_per_symbol_to_risk() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class CapturingRiskEngine:
+        def __init__(self) -> None:
+            self.received_strengths: list[float] = []
+
+        def process_signals(self, signals, portfolio, market, config):
+            self.received_strengths = [signal.strength for signal in signals]
+            return RiskResult(
+                [],
+                constraints={},
+                rejected_signals=list(signals),
+                sizing_rejections={"VolatilitySizer": ["BTC_USDT: No target produced by sizer"]},
+                constraint_diagnostics={
+                    "MinPositionValueConstraint": {
+                        "rejected_notional_values": [4.0],
+                        "min_position_value": 5.0,
+                        "count": 1,
+                    }
+                },
+            )
+
+    risk_engine = CapturingRiskEngine()
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=ThresholdScoreStrategy([0.6, 0.9]),
+        risk_engine=risk_engine,
+        simulator_factory=no_order_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={"fixed_threshold": 0.5},
+    )
+
+    assert risk_engine.received_strengths == [0.9]
+    assert results[0].signals_generated == 2
+    assert results[0].risk_rejected == 1
+    assert results[0].diagnostics["long_signals"] == 2
+    assert results[0].diagnostics["risk_signals"] == 1
+    assert results[0].diagnostics["sizing_rejections"] == {
+        "VolatilitySizer": ["BTC_USDT: No target produced by sizer"]
+    }
+    assert results[0].diagnostics["constraint_diagnostics"] == {
+        "MinPositionValueConstraint": {
+            "rejected_notional_values": [4.0],
+            "min_position_value": 5.0,
+            "count": 1,
+        }
+    }
+
+
+def test_run_rolling_skips_risk_when_no_signals_are_actionable() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class FailingRiskEngine:
+        def process_signals(self, signals, portfolio, market, config):
+            raise AssertionError("flat-only windows should not call risk")
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=ThresholdScoreStrategy([0.1, 0.2]),
+        risk_engine=FailingRiskEngine(),
+        simulator_factory=no_order_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={"fixed_threshold": 0.5},
+    )
+
+    assert results[0].signals_generated == 2
+    assert results[0].orders_submitted == 0
+    assert results[0].risk_rejected == 0
+    assert results[0].diagnostics["long_signals"] == 0
+
+
+def test_run_rolling_dynamic_quantile_grid_uses_score_candidates() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class QuantileGridStrategy:
+        def fit(self, features: pl.DataFrame, labels: pl.Series | None = None) -> None:
+            pass
+
+        def predict(self, features: pl.DataFrame) -> SignalOutput:
+            return SignalOutput(
+                scores=pl.Series([0.2, 0.8][: len(features)]),
+                labels=pl.Series([1] * len(features)),
+            )
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=QuantileGridStrategy(),
+        risk_engine=DummyRiskEngine(),
+        simulator_factory=no_order_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={
+            "threshold_grid_mode": "quantile",
+            "threshold_grid_quantiles": [1.0],
+            "min_trades_per_window": 1,
+        },
+    )
+
+    assert results[0].threshold > 0.8
+    assert results[0].diagnostics["trades"] == 1
+
+
+def test_run_rolling_threshold_grid_restricts_search_candidates() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class GridStrategy:
+        def fit(self, features: pl.DataFrame, labels: pl.Series | None = None) -> None:
+            pass
+
+        def predict(self, features: pl.DataFrame) -> SignalOutput:
+            return SignalOutput(
+                scores=pl.Series([0.9, 0.8][: len(features)]),
+                labels=pl.Series([1] * len(features)),
+            )
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=GridStrategy(),
+        risk_engine=DummyRiskEngine(),
+        simulator_factory=dummy_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={"threshold_grid": [0.5], "min_trades_per_window": 1},
+    )
+
+    assert results[0].threshold == 0.5
+    assert results[0].diagnostics["precision"] == 1.0
+    assert results[0].diagnostics["trades"] == 2
 
 
 def test_run_rolling_with_calibration_and_constraints() -> None:
@@ -226,7 +481,7 @@ def test_run_rolling_with_calibration_and_constraints() -> None:
         simulator_factory=dummy_simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -235,6 +490,54 @@ def test_run_rolling_with_calibration_and_constraints() -> None:
         calibration_split=0.1,
     )
     assert results
+    diagnostics = results[0].diagnostics
+    assert diagnostics["calibration_raw_scores"]["count"] == 1
+    assert diagnostics["calibration_calibrated_scores"]["count"] == 1
+    assert diagnostics["test_raw_scores"]["count"] == 2
+    assert diagnostics["test_calibrated_scores"]["count"] == 2
+    assert diagnostics["test_calibrated_scores"]["min"] >= 0.0
+    assert diagnostics["test_calibrated_scores"]["max"] <= 1.0
+
+
+def test_run_rolling_without_calibration_split_records_score_diagnostics() -> None:
+    features = pl.DataFrame({"f": [1, 2, 3, 4]})
+    labels = pl.Series([0, 1, 0, 1])
+    ts = datetime(2024, 1, 1, tzinfo=UTC)
+
+    class VaryingScoreStrategy:
+        def fit(self, features: pl.DataFrame, labels: pl.Series | None = None) -> None:
+            self._labels = labels
+
+        def predict(self, features: pl.DataFrame) -> SignalOutput:
+            scores = pl.Series([0.25, 0.75][: len(features)])
+            labels = pl.Series([0] * len(features))
+            return SignalOutput(scores=scores, labels=labels)
+
+    results = run_rolling(
+        features=features,
+        labels=labels,
+        strategy=VaryingScoreStrategy(),
+        risk_engine=DummyRiskEngine(),
+        simulator_factory=dummy_simulator_factory,
+        bars_provider=DummyBars(dummy_bars()),
+        portfolio_provider=DummyPortfolio(ts),
+        risk_config=RiskConfig(),
+        train_size=2,
+        valid_size=2,
+        step=2,
+        sim_config=SimulatorConfig(),
+        threshold_cfg={"top_signals": 1},
+    )
+
+    diagnostics = results[0].diagnostics
+    assert diagnostics["calibration_raw_scores"]["count"] == 2
+    assert diagnostics["calibration_calibrated_scores"]["count"] == 2
+    assert diagnostics["test_raw_scores"]["count"] == 2
+    assert diagnostics["test_calibrated_scores"]["count"] == 2
+    assert diagnostics["test_raw_scores"]["min"] == 0.25
+    assert diagnostics["test_raw_scores"]["max"] == 0.75
+    assert diagnostics["test_calibrated_scores"]["min"] < 1.0
+    assert diagnostics["test_calibrated_scores"]["std"] > 0.0
 
 
 def test_run_rolling_with_walk_forward_splits_populates_slice_metadata() -> None:
@@ -267,7 +570,7 @@ def test_run_rolling_with_walk_forward_splits_populates_slice_metadata() -> None
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -309,7 +612,7 @@ def test_run_rolling_generates_deterministic_slice_id_when_missing() -> None:
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -323,7 +626,7 @@ def test_run_rolling_generates_deterministic_slice_id_when_missing() -> None:
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -334,10 +637,7 @@ def test_run_rolling_generates_deterministic_slice_id_when_missing() -> None:
     assert len(results_b) == 1
     assert results_a[0].slice_id == results_b[0].slice_id
     assert results_a[0].slice_id is not None
-    assert results_a[0].slice_id == (
-        "time_window:"
-        "train=0-2|validate=2-4|test=4-6"
-    )
+    assert results_a[0].slice_id == ("time_window:train=0-2|validate=2-4|test=4-6")
 
 
 def test_run_rolling_splits_metadata_keeps_structural_fields_separate_from_violations() -> None:
@@ -361,7 +661,7 @@ def test_run_rolling_splits_metadata_keeps_structural_fields_separate_from_viola
         simulator_factory=dummy_simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -402,7 +702,7 @@ def test_downstream_cache_keying_can_use_fold_slice_id() -> None:
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
@@ -416,7 +716,7 @@ def test_downstream_cache_keying_can_use_fold_slice_id() -> None:
         simulator_factory=simulator_factory,
         bars_provider=DummyBars(dummy_bars()),
         portfolio_provider=DummyPortfolio(ts),
-        risk_config=RiskConfig(initial_cash=Decimal("10000")),
+        risk_config=RiskConfig(),
         train_size=2,
         valid_size=2,
         step=2,
