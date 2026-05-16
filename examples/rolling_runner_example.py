@@ -1,13 +1,15 @@
 """Example showing rolling runner wiring with dummy components."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import polars as pl
 
 from liq.core import Bar, OrderRequest, OrderSide, OrderType, PortfolioState
-from liq.risk.config import RiskConfig
+from liq.risk.config import MarketState, RiskConfig
 from liq.runner.runner import run_rolling
+from liq.signals import Signal
 from liq.signals.output import SignalOutput
 from liq.sim.config import ProviderConfig, SimulatorConfig
 from liq.sim.simulator import Simulator
@@ -15,6 +17,7 @@ from liq.sim.simulator import Simulator
 
 class ExampleStrategy:
     def fit(self, features: pl.DataFrame, labels: pl.Series | None = None) -> None:
+        _ = features
         self.labels = labels
 
     def predict(self, features: pl.DataFrame) -> SignalOutput:
@@ -24,19 +27,26 @@ class ExampleStrategy:
 
 
 class ExampleRiskEngine:
-    def process_signals(self, signals, portfolio, market, config):
-        ts = signals[0]["timestamp"]
+    def process_signals(
+        self,
+        signals: Sequence[Signal],
+        portfolio: PortfolioState,
+        market: MarketState,
+        config: RiskConfig,
+    ):
+        _ = (portfolio, market, config)
+        signal = signals[0]
         return type(
             "Res",
             (),
             {
                 "orders": [
                     OrderRequest(
-                        symbol=signals[0]["symbol"],
+                        symbol=signal.symbol,
                         quantity=Decimal("1"),
                         side=OrderSide.BUY,
                         order_type=OrderType.MARKET,
-                        timestamp=ts,
+                        timestamp=signal.timestamp,
                     )
                 ]
             },
@@ -56,6 +66,7 @@ class ExamplePortfolioProvider:
         self.ts = ts
 
     def get_portfolio(self, split: slice) -> PortfolioState:
+        _ = split
         return PortfolioState(cash=Decimal("10000"), positions={}, timestamp=self.ts)
 
 
