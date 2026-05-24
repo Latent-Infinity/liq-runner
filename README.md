@@ -10,9 +10,10 @@ The rolling runner coordinates strategy training, calibration/EV thresholding, r
   1) Split data (rolling/blocked).
   2) Fit strategy and generate `SignalOutput`.
   3) Calibrate scores + select EV threshold (`liq-sim.calibration`).
-  4) Size orders via `liq-risk` policy.
-  5) Simulate via `liq-sim` (with funding/slippage/risk caps).
-  6) Summarize metrics via `liq-metrics`.
+  4) Filter actionable signals with `threshold_cfg.max_signals_per_symbol` (default: `1` to preserve strongest-signal-per-symbol behavior; `null` keeps all above-threshold signals).
+  5) Size orders via `liq-risk` policy.
+  6) Simulate via `liq-sim` (with funding/slippage/risk caps).
+  7) Summarize metrics via `liq-metrics`.
 - **Outputs**: fold thresholds/params, sim diagnostics (funding/slippage/rejections), metrics.
 
 Usage sketch:
