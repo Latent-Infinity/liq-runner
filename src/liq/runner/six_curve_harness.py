@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, time, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from liq.metrics.performance import PerformanceAnalyzer, PerformanceReport
 from liq.metrics.six_curves import SixCurveInputs, SixCurveResult, compute_six_curves
 
 REQUIRED_METADATA = ("experiment_id", "account_policy_hash", "optimizer_spec_hash")
@@ -39,6 +42,64 @@ class LegacyVerdictSummary:
 
 def _curve_json(values: tuple) -> list[str]:
     return [str(v) for v in values]
+
+
+def _equity_curve(
+    dates: tuple,
+    starting_capital: Decimal,
+    values: tuple[Decimal, ...],
+) -> list[tuple[datetime, Decimal]]:
+    start_ts = datetime.combine(dates[0], time.min) - timedelta(microseconds=1)
+    return [(start_ts, starting_capital)] + [
+        (datetime.combine(d, time.min), value) for d, value in zip(dates, values, strict=True)
+    ]
+
+
+def _performance_json(report: PerformanceReport) -> dict[str, Any]:
+    return {
+        "aggregate": {
+            "total_return": report.aggregate.total_return,
+            "sharpe_ratio": report.aggregate.sharpe_ratio,
+            "max_drawdown": report.aggregate.max_drawdown,
+            "num_bars": report.aggregate.num_bars,
+            "win_rate": report.aggregate.win_rate,
+        },
+        "by_regime": {
+            regime: {
+                "total_return": metrics.total_return,
+                "sharpe_ratio": metrics.sharpe_ratio,
+                "max_drawdown": metrics.max_drawdown,
+                "num_bars": metrics.num_bars,
+                "win_rate": metrics.win_rate,
+            }
+            for regime, metrics in report.by_regime.items()
+        },
+    }
+
+
+def _performance_artifact(inputs: SixCurveInputs, result: SixCurveResult) -> dict[str, Any]:
+    analyzer = PerformanceAnalyzer()
+    labels = [
+        (ts, "aggregate")
+        for ts, _ in _equity_curve(inputs.dates, inputs.starting_capital, result.e)
+    ]
+    candidate = analyzer.analyze(
+        _equity_curve(inputs.dates, inputs.starting_capital, result.e),
+        labels,
+    )
+    baseline = analyzer.analyze(
+        _equity_curve(inputs.dates, inputs.starting_capital, result.a3),
+        labels,
+    )
+    comparison = analyzer.compare(candidate, baseline)
+    return {
+        "candidate_curve": "e",
+        "baseline_curve": "a3",
+        "candidate": _performance_json(candidate),
+        "baseline": _performance_json(baseline),
+        "outperforms_aggregate": comparison.outperforms_aggregate,
+        "outperforms_per_regime": comparison.outperforms_per_regime,
+    }
 
 
 def _artifact(inputs: SixCurveInputs, result: SixCurveResult, metadata: dict[str, Any]) -> dict:
@@ -65,6 +126,7 @@ def _artifact(inputs: SixCurveInputs, result: SixCurveResult, metadata: dict[str
             "f2_nav": str(result.f.f2_nav),
             "f3_nav": str(result.f.f3_nav),
         },
+        "performance": _performance_artifact(inputs, result),
         "metadata": dict(metadata),
     }
 

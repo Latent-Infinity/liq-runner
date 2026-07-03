@@ -412,8 +412,10 @@ class TestProtectiveBrackets:
 
     def test_long_entry_gets_atr_brackets(self) -> None:
         out = _attach_protective_brackets(
-            [self._order(OrderSide.BUY)], self._ms("100", "2"),
-            stop_atr_mult=1.5, take_atr_mult=3.0,
+            [self._order(OrderSide.BUY)],
+            self._ms("100", "2"),
+            stop_atr_mult=1.5,
+            take_atr_mult=3.0,
         )
         md = out[0].metadata
         assert md is not None
@@ -422,9 +424,7 @@ class TestProtectiveBrackets:
 
     def test_sell_exit_order_untouched(self) -> None:
         sell = self._order(OrderSide.SELL)
-        out = _attach_protective_brackets(
-            [sell], self._ms(), stop_atr_mult=1.5, take_atr_mult=3.0
-        )
+        out = _attach_protective_brackets([sell], self._ms(), stop_atr_mult=1.5, take_atr_mult=3.0)
         assert out[0].metadata is None
 
     def test_disabled_when_mults_unset_is_byte_identical(self) -> None:
@@ -437,19 +437,21 @@ class TestProtectiveBrackets:
 
     def test_symbol_missing_from_market_state_is_skipped(self) -> None:
         ts = datetime(2024, 1, 1, tzinfo=UTC)
-        empty = MarketState(
-            current_bars={}, volatility={}, liquidity={}, timestamp=ts
-        )
+        empty = MarketState(current_bars={}, volatility={}, liquidity={}, timestamp=ts)
         out = _attach_protective_brackets(
-            [self._order(OrderSide.BUY)], empty,
-            stop_atr_mult=1.5, take_atr_mult=3.0,
+            [self._order(OrderSide.BUY)],
+            empty,
+            stop_atr_mult=1.5,
+            take_atr_mult=3.0,
         )
         assert out[0].metadata is None
 
     def test_nonpositive_atr_is_skipped(self) -> None:
         out = _attach_protective_brackets(
-            [self._order(OrderSide.BUY)], self._ms("100", "0"),
-            stop_atr_mult=1.5, take_atr_mult=3.0,
+            [self._order(OrderSide.BUY)],
+            self._ms("100", "0"),
+            stop_atr_mult=1.5,
+            take_atr_mult=3.0,
         )
         assert out[0].metadata is None
 
@@ -462,8 +464,10 @@ class TestProtectiveBrackets:
             (order.symbol, order.timestamp): (Decimal("95.5"), Decimal("110.25")),
         }
         out = _attach_protective_brackets(
-            [order], self._ms("100", "2"),
-            stop_atr_mult=1.5, take_atr_mult=3.0,
+            [order],
+            self._ms("100", "2"),
+            stop_atr_mult=1.5,
+            take_atr_mult=3.0,
             bracket_prices=prices,
         )
         md = out[0].metadata
@@ -475,8 +479,10 @@ class TestProtectiveBrackets:
         # If the per-row map is provided but does not cover this (symbol,ts),
         # the ATR-mult fallback applies (regression-safe for partial coverage).
         out = _attach_protective_brackets(
-            [self._order(OrderSide.BUY)], self._ms("100", "2"),
-            stop_atr_mult=1.5, take_atr_mult=3.0,
+            [self._order(OrderSide.BUY)],
+            self._ms("100", "2"),
+            stop_atr_mult=1.5,
+            take_atr_mult=3.0,
             bracket_prices={},  # empty map -> fallback
         )
         md = out[0].metadata
@@ -624,9 +630,15 @@ def test_continuous_sizing_rank_normalize_emits_orders_when_scores_all_below_hal
         def run(self, orders, bars):  # noqa: ARG002
             self.recorded_orders = list(orders)
             return SimpleNamespace(
-                fills=[], rejected_orders=[], funding_charged=Decimal("0"),
-                slippage_stats={}, missing_ratio=0.0, zero_volume_ratio=0.0,
-                ohlc_inconsistencies=0, extreme_moves=0, negative_volume=0,
+                fills=[],
+                rejected_orders=[],
+                funding_charged=Decimal("0"),
+                slippage_stats={},
+                missing_ratio=0.0,
+                zero_volume_ratio=0.0,
+                ohlc_inconsistencies=0,
+                extreme_moves=0,
+                negative_volume=0,
                 non_monotonic_ts=0,
             )
 
@@ -1387,8 +1399,6 @@ def test_run_rolling_can_send_multiple_actionable_signals_per_symbol_to_risk() -
     assert results[0].risk_rejected == 2
     assert results[0].diagnostics["long_signals"] == 2
     assert results[0].diagnostics["risk_signals"] == 2
-
-
 
     features = pl.DataFrame({"f": [1, 2, 3, 4]})
     labels = pl.Series([0, 1, 0, 1])

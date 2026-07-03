@@ -60,6 +60,8 @@ class TestHarnessArtifact:
         assert loaded["metadata"]["account_policy_hash"] == "unpinned-smoke"
         assert loaded["dates"] == ["2026-01-31", "2026-02-28"]
         assert loaded["no_tax_smoke"] is True
+        assert loaded["performance"]["candidate_curve"] == "e"
+        assert loaded["performance"]["baseline_curve"] == "a3"
 
     def test_metadata_hash_slots_are_required(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="account_policy_hash"):
@@ -80,6 +82,22 @@ class TestHarnessArtifact:
             },
         )
         assert all(isinstance(v, str) for v in artifact["curves"]["a"])  # Decimal fidelity
+
+    def test_performance_report_reuses_metrics_analyzer(self, tmp_path: Path) -> None:
+        artifact = run_six_curve_harness(
+            _inputs(),
+            output_path=tmp_path / "x.json",
+            metadata={
+                "experiment_id": "demo",
+                "account_policy_hash": "h1",
+                "optimizer_spec_hash": "h2",
+            },
+        )
+        performance = artifact["performance"]
+        assert performance["candidate"]["aggregate"]["num_bars"] == 3
+        assert performance["baseline"]["aggregate"]["num_bars"] == 3
+        assert "outperforms_aggregate" in performance
+        assert performance["outperforms_per_regime"] == {"aggregate": False}
 
 
 class TestLegacyVerdictConverter:
