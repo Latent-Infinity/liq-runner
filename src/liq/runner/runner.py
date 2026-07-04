@@ -694,13 +694,13 @@ def run_rolling(
             # Pre-compute window-relative ranks for rank-normalize sizing
             # (unit-invariant: monetizes the AUC/IC-defined ranking regardless
             # of the raw score's domain).
-            _scores_list = [float(s) for s in _ranking]
-            _sorted_scores = sorted(_scores_list)
+            _scores_list: list[float] = [cast(float, float(s)) for s in _ranking]
+            _sorted_scores = tuple(sorted(_scores_list))
             _n_scores = len(_sorted_scores)
             for _bar, _raw in zip(bars, _ranking, strict=False):
                 # Decimal-end-to-end avoids IEEE-754 noise
                 # (e.g. 2 * (0.6 - 0.5) = 0.19999... in float).
-                _raw_f = float(_raw)
+                _raw_f = cast(float, float(_raw))
                 if sizing_fn == "rank_normalize":
                     # Empirical CDF rank P[X <= score], unit-invariant.
                     _rank = bisect_right(_sorted_scores, _raw_f) / _n_scores if _n_scores else 0.0

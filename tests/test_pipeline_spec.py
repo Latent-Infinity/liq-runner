@@ -55,3 +55,41 @@ def test_pipeline_run_state_to_dict() -> None:
     assert payload["config_hash"] == "abc"
     assert payload["dataset_hash"] == "data"
     assert payload["model_hash"] == "model"
+
+
+class TestCostScenarioValidation:
+    """Stages naming a cost scenario must resolve it from the cost book."""
+
+    @staticmethod
+    def _spec(cost_scenario: object) -> PipelineSpec:
+        return PipelineSpec(
+            name="pilot",
+            stages=[
+                PipelineStageSpec(
+                    name="backtest",
+                    config={"cost_scenario": cost_scenario},
+                )
+            ],
+        )
+
+    def test_known_scenario_validates(self) -> None:
+        self._spec("spy_qqq_base_v1").validate()
+
+    def test_unknown_scenario_refuses_to_start(self) -> None:
+        import pytest
+
+        from liq.runner.cost_book import UnknownCostScenarioError
+
+        with pytest.raises(UnknownCostScenarioError):
+            self._spec("not_a_scenario").validate()
+
+    def test_unnamed_scenario_refuses_to_start(self) -> None:
+        import pytest
+
+        from liq.runner.cost_book import UnknownCostScenarioError
+
+        with pytest.raises(UnknownCostScenarioError):
+            self._spec("").validate()
+
+    def test_stage_without_cost_scenario_still_validates(self) -> None:
+        PipelineSpec(name="pipeline", stages=[PipelineStageSpec(name="stage")]).validate()

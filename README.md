@@ -52,6 +52,31 @@ uv run python -m liq.runner.cli --spec examples/pipeline.json --dry-run --print-
 
 See `examples/rolling_runner_example.py` for a runnable end-to-end dummy wiring.
 
+## Cost book and run provenance
+
+Execution costs are resolved from the central cost book by scenario name —
+never inlined in pilot code:
+
+```python
+from liq.runner import INTRADAY_CAMPAIGN_COST_BOOK_V1, build_run_provenance
+
+scenario = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("spy_qqq_base_v1")
+provenance = build_run_provenance(
+    run_id="run_0001",
+    code_hash=code_hash,
+    config_hash=config_hash,
+    cost_scenario_id="spy_qqq_base_v1",
+    periods_touched=[("2015-01-01", "2022-12-31")],
+    seeds={"global": 42},
+)
+provenance.write_json(artifact_dir / "provenance.json")
+```
+
+An unknown or unnamed scenario raises `UnknownCostScenarioError` before any
+data is touched — both in `build_run_provenance` and in
+`PipelineSpec.validate()` when a stage config carries a `cost_scenario` key.
+The resolved scenario id and cost-book version are recorded in provenance.
+
 ## Pipeline/Drift utilities
 
 - `PipelineManager` + `Orchestrator`: apply persisted feature pipelines (from liq-features) without refitting.

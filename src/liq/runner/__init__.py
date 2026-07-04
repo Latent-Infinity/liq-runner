@@ -1,5 +1,11 @@
 """Runner orchestration utilities."""
 
+from liq.runner.cost_book import (
+    INTRADAY_CAMPAIGN_COST_BOOK_V1,
+    CostBook,
+    CostScenario,
+    UnknownCostScenarioError,
+)
 from liq.runner.drift_manager import DriftAction, DriftManager
 from liq.runner.pipeline_manager import PipelineManager
 from liq.runner.pipeline_spec import (
@@ -10,6 +16,7 @@ from liq.runner.pipeline_spec import (
     default_pipeline,
     dry_run_steps,
 )
+from liq.runner.provenance import RunProvenance, build_run_provenance
 
 __all__ = [
     "PipelineManager",
@@ -21,4 +28,10 @@ __all__ = [
     "compute_config_hash",
     "dry_run_steps",
     "default_pipeline",
+    "CostBook",
+    "CostScenario",
+    "UnknownCostScenarioError",
+    "INTRADAY_CAMPAIGN_COST_BOOK_V1",
+    "RunProvenance",
+    "build_run_provenance",
 ]
