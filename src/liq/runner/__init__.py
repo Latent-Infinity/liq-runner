@@ -7,6 +7,13 @@ from liq.runner.cost_book import (
     UnknownCostScenarioError,
 )
 from liq.runner.drift_manager import DriftAction, DriftManager
+from liq.runner.fx_spread import (
+    FIXED_SPREAD_TABLE_V1,
+    FxSpreadTable,
+    UnknownPairError,
+    pip_size,
+    spread_cost_fraction,
+)
 from liq.runner.pipeline_manager import PipelineManager
 from liq.runner.pipeline_spec import (
     PipelineRunState,
@@ -34,4 +41,9 @@ __all__ = [
     "INTRADAY_CAMPAIGN_COST_BOOK_V1",
     "RunProvenance",
     "build_run_provenance",
+    "FxSpreadTable",
+    "FIXED_SPREAD_TABLE_V1",
+    "UnknownPairError",
+    "pip_size",
+    "spread_cost_fraction",
 ]
