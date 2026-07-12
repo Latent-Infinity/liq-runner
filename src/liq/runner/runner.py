@@ -683,9 +683,7 @@ def run_rolling(
         continuous_orders: list[OrderRequest] | None = None
         if sizing_mode == "continuous":
             if max_notional_per_symbol is None:
-                raise ValueError(
-                    "max_notional_per_symbol required when sizing_mode='continuous'"
-                )
+                raise ValueError("max_notional_per_symbol required when sizing_mode='continuous'")
             tracked: dict[str, Decimal] = {}
             continuous_orders = []
             _ranking = ranking_scores if signal_output is not None else []
@@ -696,20 +694,16 @@ def run_rolling(
             # Pre-compute window-relative ranks for rank-normalize sizing
             # (unit-invariant: monetizes the AUC/IC-defined ranking regardless
             # of the raw score's domain).
-            _scores_list = [float(s) for s in _ranking]
-            _sorted_scores = sorted(_scores_list)
+            _scores_list: list[float] = [cast(float, float(s)) for s in _ranking]
+            _sorted_scores = tuple(sorted(_scores_list))
             _n_scores = len(_sorted_scores)
             for _bar, _raw in zip(bars, _ranking, strict=False):
                 # Decimal-end-to-end avoids IEEE-754 noise
                 # (e.g. 2 * (0.6 - 0.5) = 0.19999... in float).
-                _raw_f = float(_raw)
+                _raw_f = cast(float, float(_raw))
                 if sizing_fn == "rank_normalize":
                     # Empirical CDF rank P[X <= score], unit-invariant.
-                    _rank = (
-                        bisect_right(_sorted_scores, _raw_f) / _n_scores
-                        if _n_scores
-                        else 0.0
-                    )
+                    _rank = bisect_right(_sorted_scores, _raw_f) / _n_scores if _n_scores else 0.0
                     _target_dec = Decimal(str(_rank))
                 else:  # linear
                     _score_dec = Decimal(str(_raw_f))
@@ -724,9 +718,7 @@ def run_rolling(
                 )
                 if _od is not None:
                     continuous_orders.append(_od)
-                    tracked[_bar.symbol] = (
-                        max_notional_per_symbol * _target_dec / _bar.close
-                    )
+                    tracked[_bar.symbol] = max_notional_per_symbol * _target_dec / _bar.close
         # Wrap scores into signals for risk engine; here we use threshold as a simple long/flat filter
         # Build signals aligned to the validation bars using the calibrated scores.
         signals: list[Signal] = []
@@ -747,9 +739,7 @@ def run_rolling(
         # sizing keep the model's true (uncalibrated) ordering.
         decision_iter = signal_output.scores if signal_output is not None else []
         ranking_iter = ranking_scores if signal_output is not None else []
-        for bar, decision_score, rank_score in zip(
-            bars, decision_iter, ranking_iter, strict=False
-        ):
+        for bar, decision_score, rank_score in zip(bars, decision_iter, ranking_iter, strict=False):
             side = "long" if decision_score >= entry_threshold else "flat"
             signals.append(
                 Signal(
@@ -849,9 +839,7 @@ def run_rolling(
                                 "side": getattr(_o.side, "value", str(_o.side)),
                                 "quantity": float(_o.quantity),
                                 "confidence": (
-                                    float(_o.confidence)
-                                    if _o.confidence is not None
-                                    else None
+                                    float(_o.confidence) if _o.confidence is not None else None
                                 ),
                                 "timestamp": _o.timestamp.isoformat()
                                 if _o.timestamp is not None

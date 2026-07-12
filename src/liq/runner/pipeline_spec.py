@@ -51,6 +51,8 @@ class PipelineSpec:
     artifact_root: str = "artifacts"
 
     def validate(self) -> None:
+        from liq.runner.cost_book import INTRADAY_CAMPAIGN_COST_BOOK_V1
+
         if not self.name:
             raise ValueError("pipeline name must be set")
         if not self.stages:
@@ -62,6 +64,8 @@ class PipelineSpec:
             if stage.name in seen:
                 raise ValueError(f"duplicate stage name: {stage.name}")
             seen.add(stage.name)
+            if "cost_scenario" in stage.config:
+                INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve(str(stage.config["cost_scenario"] or ""))
 
     def to_dict(self) -> dict[str, Any]:
         return {
