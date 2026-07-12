@@ -48,6 +48,9 @@ class TestCampaignScenarios:
             "single_name_us_base_v1",
             "single_name_us_stress_30_v1",
             "single_name_us_stress_40_v1",
+            "single_name_us_ts_optimistic_v1",
+            "single_name_us_ts_base_v1",
+            "single_name_us_ts_stress_v1",
             "oanda_fixed_spread_table_v1",
             "oanda_london_open_1p5x_v1",
             "oanda_fix_window_1p5x_v1",
@@ -56,6 +59,9 @@ class TestCampaignScenarios:
             "binance_perp_optimistic_v1",
             "binance_perp_middle_v1",
             "binance_perp_stress_v1",
+            "coinbase_spot_maker_maker_v1",
+            "coinbase_spot_base_v1",
+            "coinbase_spot_taker_taker_v1",
         ],
     )
     def test_scenario_present(self, scenario_id: str) -> None:
@@ -73,11 +79,38 @@ class TestCampaignScenarios:
         assert base.params["round_trip_bps"] == 20.0
         assert base.params["hedge_per_side_bps"] == 0.5
 
+    def test_single_name_ts_realistic_costs(self) -> None:
+        """TradeStation single-name equity: observed ~2-6 bps RT, base = 6 (conservative)."""
+        opt = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_ts_optimistic_v1")
+        base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_ts_base_v1")
+        stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_ts_stress_v1")
+        assert opt.params["round_trip_bps"] == 2.0
+        assert base.params["round_trip_bps"] == 6.0
+        assert stress.params["round_trip_bps"] == 12.0
+        # all on the single_name_us surface, stress = 2x the conservative base
+        assert base.surface == "single_name_us"
+        assert stress.params["round_trip_bps"] == 2 * base.params["round_trip_bps"]
+
     def test_perp_gate_scenario_is_the_middle_one(self) -> None:
         middle = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("binance_perp_middle_v1")
         assert middle.params["maker_bps"] == 2.0
         assert middle.params["taker_bps"] == 7.5
         assert "gate" in middle.description.lower()
+
+    def test_coinbase_spot_tier_and_gate(self) -> None:
+        """Coinbase Advanced spot, >$10K 30-day tier: maker 25 / taker 40 bps."""
+        opt = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("coinbase_spot_maker_maker_v1")
+        base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("coinbase_spot_base_v1")
+        stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("coinbase_spot_taker_taker_v1")
+        assert base.surface == "coinbase_spot"
+        # base is the gate scenario: maker entry + taker exit
+        assert base.params["maker_bps"] == 25.0
+        assert base.params["taker_bps"] == 40.0
+        assert "gate" in base.description.lower()
+        # optimistic = both legs maker; stress = both legs taker (PF >= 1.0 floor)
+        assert opt.params["taker_bps"] == 25.0
+        assert stress.params["maker_bps"] == 40.0
+        assert stress.params["taker_bps"] == 40.0
 
 
 class TestCustomBook:

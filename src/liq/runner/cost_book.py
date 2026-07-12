@@ -128,6 +128,29 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             hedge_per_side_bps=0.5,
         ),
         _scenario(
+            "single_name_us_ts_optimistic_v1",
+            "single_name_us",
+            "US single names via TradeStation, optimistic: 2 bps round trip "
+            "(low end of observed 2-6 bps RT)",
+            round_trip_bps=2.0,
+            hedge_per_side_bps=0.5,
+        ),
+        _scenario(
+            "single_name_us_ts_base_v1",
+            "single_name_us",
+            "US single names via TradeStation, conservative realistic: 6 bps round trip "
+            "(high end of observed 2-6 bps RT)",
+            round_trip_bps=6.0,
+            hedge_per_side_bps=0.5,
+        ),
+        _scenario(
+            "single_name_us_ts_stress_v1",
+            "single_name_us",
+            "US single names via TradeStation stress: 12 bps round trip (2x the conservative base)",
+            round_trip_bps=12.0,
+            hedge_per_side_bps=0.5,
+        ),
+        _scenario(
             "oanda_fixed_spread_table_v1",
             "oanda_fx",
             "OANDA FX base: fixed per-pair spread table",
@@ -184,6 +207,30 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             "Binance perp stress: maker 10 / taker 10 bps (floor: PF >= 1.0)",
             maker_bps=10.0,
             taker_bps=10.0,
+        ),
+        _scenario(
+            "coinbase_spot_maker_maker_v1",
+            "coinbase_spot",
+            "Coinbase Advanced spot, >$10K 30-day tier, optimistic (both legs maker): "
+            "maker 25 / taker 25 bps",
+            maker_bps=25.0,
+            taker_bps=25.0,
+        ),
+        _scenario(
+            "coinbase_spot_base_v1",
+            "coinbase_spot",
+            "Coinbase Advanced spot, >$10K 30-day tier, gate scenario (maker entry + taker exit): "
+            "maker 25 / taker 40 bps (0.25% / 0.40%, 2026-07)",
+            maker_bps=25.0,
+            taker_bps=40.0,
+        ),
+        _scenario(
+            "coinbase_spot_taker_taker_v1",
+            "coinbase_spot",
+            "Coinbase Advanced spot, >$10K 30-day tier, stress (both legs taker): "
+            "maker 40 / taker 40 bps (floor: PF >= 1.0)",
+            maker_bps=40.0,
+            taker_bps=40.0,
         ),
     ],
 )
