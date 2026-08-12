@@ -77,6 +77,25 @@ data is touched — both in `build_run_provenance` and in
 `PipelineSpec.validate()` when a stage config carries a `cost_scenario` key.
 The resolved scenario id and cost-book version are recorded in provenance.
 
+Before writing a signal-bearing run, reconcile every provenance period to a
+citable guarded read for the same dataset:
+
+```python
+from liq.runner import reconcile_periods_touched
+
+reconcile_periods_touched(
+    provenance,
+    periods_by_dataset={"oanda_fx": [("2015-01-01", "2022-12-31")]},
+    guarded_windows_by_dataset={"oanda_fx": guarded_oanda_windows},
+)
+```
+
+The reconciliation gate rejects invalid dates, unattributed provenance periods,
+and reads from a different dataset. Supply guarded windows filtered to the same
+arm and research-purpose ledger entries; `dev_smoke` cannot provide citable
+coverage. This final check complements guarded access at read time—it does not
+replace it.
+
 ## Pipeline/Drift utilities
 
 - `PipelineManager` + `Orchestrator`: apply persisted feature pipelines (from liq-features) without refitting.

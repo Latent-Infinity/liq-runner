@@ -23,7 +23,12 @@ from liq.runner.pipeline_spec import (
     default_pipeline,
     dry_run_steps,
 )
-from liq.runner.provenance import RunProvenance, build_run_provenance
+from liq.runner.provenance import (
+    RunProvenance,
+    RunReconciliationError,
+    build_run_provenance,
+    reconcile_periods_touched,
+)
 
 __all__ = [
     "PipelineManager",
@@ -40,7 +45,9 @@ __all__ = [
     "UnknownCostScenarioError",
     "INTRADAY_CAMPAIGN_COST_BOOK_V1",
     "RunProvenance",
+    "RunReconciliationError",
     "build_run_provenance",
+    "reconcile_periods_touched",
     "FxSpreadTable",
     "FIXED_SPREAD_TABLE_V1",
     "UnknownPairError",
