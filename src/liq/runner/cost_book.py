@@ -232,5 +232,44 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             maker_bps=40.0,
             taker_bps=40.0,
         ),
+        _scenario(
+            "cme_micro_crypto_tradestation_tiered_base_v1",
+            "cme_micro_crypto",
+            "CME Micro Bitcoin/Ether futures through the TradeStation tiered plan. "
+            "Execution and regulatory charges are per contract per side; the overnight "
+            "charge applies per net open contract on each settlement date.",
+            pricing_plan="tradestation_tiered",
+            source_as_of="2026-08-11",
+            pricing_disclosure_url="https://www.tradestation.com/futures-pricing-disclosures/",
+            fee_schedule_url=(
+                "https://www.tradestation.com/pricing/exchange-execution-and-clearing-fees/"
+            ),
+            commission_per_contract_per_side=0.50,
+            clearing_per_contract_per_side=0.10,
+            nfa_per_contract_per_side=0.01,
+            exchange_fee_btc_per_contract_per_side=1.15,
+            exchange_fee_eth_per_contract_per_side=0.10,
+            overnight_fee_per_open_contract_per_settlement=0.10,
+            slippage_bps=1.0,
+        ),
+        _scenario(
+            "cme_micro_crypto_tradestation_tiered_stress_v1",
+            "cme_micro_crypto",
+            "CME Micro Bitcoin/Ether futures through the TradeStation tiered plan, "
+            "with the sourced fee schedule and wider execution slippage.",
+            pricing_plan="tradestation_tiered",
+            source_as_of="2026-08-11",
+            pricing_disclosure_url="https://www.tradestation.com/futures-pricing-disclosures/",
+            fee_schedule_url=(
+                "https://www.tradestation.com/pricing/exchange-execution-and-clearing-fees/"
+            ),
+            commission_per_contract_per_side=0.50,
+            clearing_per_contract_per_side=0.10,
+            nfa_per_contract_per_side=0.01,
+            exchange_fee_btc_per_contract_per_side=1.15,
+            exchange_fee_eth_per_contract_per_side=0.10,
+            overnight_fee_per_open_contract_per_settlement=0.10,
+            slippage_bps=3.0,
+        ),
     ],
 )

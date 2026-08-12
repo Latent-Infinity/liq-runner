@@ -62,6 +62,8 @@ class TestCampaignScenarios:
             "coinbase_spot_maker_maker_v1",
             "coinbase_spot_base_v1",
             "coinbase_spot_taker_taker_v1",
+            "cme_micro_crypto_tradestation_tiered_base_v1",
+            "cme_micro_crypto_tradestation_tiered_stress_v1",
         ],
     )
     def test_scenario_present(self, scenario_id: str) -> None:
@@ -111,6 +113,46 @@ class TestCampaignScenarios:
         assert opt.params["taker_bps"] == 25.0
         assert stress.params["maker_bps"] == 40.0
         assert stress.params["taker_bps"] == 40.0
+
+    def test_cme_micro_crypto_per_contract_schema(self) -> None:
+        """Futures fees are per-contract dollars (sourced), not bps; exchange is per-instrument."""
+        base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve(
+            "cme_micro_crypto_tradestation_tiered_base_v1"
+        )
+        stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve(
+            "cme_micro_crypto_tradestation_tiered_stress_v1"
+        )
+        assert base.surface == "cme_micro_crypto"
+        keys = (
+            "commission_per_contract_per_side",
+            "clearing_per_contract_per_side",
+            "nfa_per_contract_per_side",
+            "exchange_fee_btc_per_contract_per_side",
+            "exchange_fee_eth_per_contract_per_side",
+            "overnight_fee_per_open_contract_per_settlement",
+            "slippage_bps",
+        )
+        for scenario in (base, stress):
+            for key in keys:
+                assert isinstance(scenario.params[key], float)
+                assert float(scenario.params[key]) >= 0.0
+            assert "per_side_bps" not in scenario.params
+            assert "round_trip_bps" not in scenario.params
+        # micro-BTC carries a materially higher CME exchange fee than micro-ETH
+        assert float(base.params["exchange_fee_btc_per_contract_per_side"]) > float(
+            base.params["exchange_fee_eth_per_contract_per_side"]
+        )
+        # stress widens execution slippage; the sourced schedule fees are unchanged
+        assert float(stress.params["slippage_bps"]) > float(base.params["slippage_bps"])
+        assert (
+            base.params["commission_per_contract_per_side"]
+            == stress.params["commission_per_contract_per_side"]
+        )
+        assert base.params["overnight_fee_per_open_contract_per_settlement"] == 0.10
+        assert base.params["pricing_plan"] == "tradestation_tiered"
+        assert base.params["source_as_of"] == "2026-08-11"
+        assert str(base.params["pricing_disclosure_url"]).startswith("https://")
+        assert str(base.params["fee_schedule_url"]).startswith("https://")
 
 
 class TestCustomBook:
