@@ -45,7 +45,11 @@ class TestCampaignScenarios:
             "spy_qqq_auction_slip_1bp_v1",
             "spy_qqq_auction_slip_2bp_v1",
             "spy_qqq_auction_slip_5bp_v1",
+            "agg_etf_base_v1",
+            "agg_etf_stress_2x_v1",
             "single_name_us_base_v1",
+            "single_name_us_long_only_v1",
+            "single_name_us_long_only_stress_30_v1",
             "single_name_us_stress_30_v1",
             "single_name_us_stress_40_v1",
             "single_name_us_ts_optimistic_v1",
@@ -76,10 +80,26 @@ class TestCampaignScenarios:
         stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("spy_qqq_stress_3x_v1")
         assert stress.params["per_side_bps"] == 3 * base.params["per_side_bps"]
 
+    def test_agg_etf_costs_base_pinned_and_stress_2x(self) -> None:
+        base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("agg_etf_base_v1")
+        stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("agg_etf_stress_2x_v1")
+        assert base.params["per_side_bps"] == 1.0  # pinned all-in proxy
+        assert stress.params["per_side_bps"] == 2 * base.params["per_side_bps"]
+        assert base.params["source_as_of"] == "2026-08-12"
+        assert str(base.params["product_page_url"]).startswith("https://www.ishares.com/")
+
     def test_single_name_includes_hedge_leg(self) -> None:
         base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_base_v1")
         assert base.params["round_trip_bps"] == 20.0
         assert base.params["hedge_per_side_bps"] == 0.5
+
+    def test_single_name_long_only_has_no_hedge_leg(self) -> None:
+        base = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_long_only_v1")
+        stress = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_long_only_stress_30_v1")
+        assert base.params["round_trip_bps"] == 20.0
+        assert stress.params["round_trip_bps"] == 30.0
+        assert "hedge_per_side_bps" not in base.params
+        assert "hedge_per_side_bps" not in stress.params
 
     def test_single_name_ts_realistic_costs(self) -> None:
         """TradeStation single-name equity: observed ~2-6 bps RT, base = 6 (conservative)."""

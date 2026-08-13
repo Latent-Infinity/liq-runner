@@ -107,11 +107,43 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             auction_slippage_bps=5.0,
         ),
         _scenario(
+            "agg_etf_base_v1",
+            "agg_etf",
+            "AGG (iShares Core U.S. Aggregate Bond ETF) all-in cost proxy: "
+            "1.0 bp/side. Conservative all-in assumption, not a measured "
+            "historical average; issuer reports a 0.01% median quoted spread "
+            "(iShares product page, recorded 2026-08-12).",
+            per_side_bps=1.0,
+            source_as_of="2026-08-12",
+            product_page_url=(
+                "https://www.ishares.com/us/products/239458/ishares-core-total-us-bond-market-etf"
+            ),
+        ),
+        _scenario(
+            "agg_etf_stress_2x_v1",
+            "agg_etf",
+            "AGG all-in cost stress: 2x the base per-side cost",
+            per_side_bps=2.0,
+        ),
+        _scenario(
             "single_name_us_base_v1",
             "single_name_us",
             "US single names: 20 bps round trip plus 0.5 bp/side SPY hedge",
             round_trip_bps=20.0,
             hedge_per_side_bps=0.5,
+        ),
+        _scenario(
+            "single_name_us_long_only_v1",
+            "single_name_us",
+            "US single names, long-only (no hedge leg): 20 bps round trip. For "
+            "long-only single-name books (e.g. index-reconstitution additions).",
+            round_trip_bps=20.0,
+        ),
+        _scenario(
+            "single_name_us_long_only_stress_30_v1",
+            "single_name_us",
+            "US single names long-only stress: 30 bps round trip, no hedge",
+            round_trip_bps=30.0,
         ),
         _scenario(
             "single_name_us_stress_30_v1",
