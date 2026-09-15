@@ -96,6 +96,18 @@ arm and research-purpose ledger entries; `dev_smoke` cannot provide citable
 coverage. This final check complements guarded access at read time—it does not
 replace it.
 
+## Immutable run artifacts
+
+`liq.runner.artifact_bundle.write_run_bundle` accepts a run root, `RunProvenance`,
+and a mapping of single-component filenames to bytes. Supply `periods_by_dataset`
+and eligible `guarded_windows_by_dataset` from the same arm's usage ledger.
+It reconciles periods before creating the run directory and refuses existing runs,
+reserved names, and case-colliding filenames. Each completed bundle includes
+`provenance.json` and `artifact-manifest.json` with SHA-256 hashes of every payload.
+The completion manifest is published last; a failed write leaves an incomplete
+directory for diagnosis. Callers must still enforce the registered artifact contract
+and data-access authorization.
+
 ## Pipeline/Drift utilities
 
 - `PipelineManager` + `Orchestrator`: apply persisted feature pipelines (from liq-features) without refitting.
