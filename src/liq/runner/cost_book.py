@@ -140,6 +140,18 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             round_trip_bps=20.0,
         ),
         _scenario(
+            "cost20bps_rt",
+            "single_name_us",
+            "Pre-registered calibration bucket for the Gate-1 and CRV "
+            "single-name equity families: 20 bps round trip, no hedge leg. "
+            "Those books residualize statistically — subtracting a "
+            "beta-weighted SPY return rather than trading a hedge — so no "
+            "hedge cost applies. The name was frozen into the Gate-1 "
+            "pre-registration and the locked gate numerics before it existed "
+            "here; it is implemented so provenance can resolve it by name.",
+            round_trip_bps=20.0,
+        ),
+        _scenario(
             "single_name_us_long_only_stress_30_v1",
             "single_name_us",
             "US single names long-only stress: 30 bps round trip, no hedge",

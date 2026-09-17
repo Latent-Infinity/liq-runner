@@ -101,6 +101,31 @@ class TestCampaignScenarios:
         assert "hedge_per_side_bps" not in base.params
         assert "hedge_per_side_bps" not in stress.params
 
+    def test_cost20bps_rt_is_the_preregistered_calibration_bucket(self) -> None:
+        """The scenario name frozen into the Gate-1 pre-registration and the
+        locked gate numerics, made resolvable.
+
+        It deliberately carries no hedge leg: the Gate-1 and CRV books
+        residualize statistically (subtracting a beta-weighted SPY return)
+        rather than trading a hedge, so no hedge cost is charged.
+        """
+        scenario = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("cost20bps_rt")
+        assert scenario.surface == "single_name_us"
+        assert scenario.params["round_trip_bps"] == 20.0
+        assert "hedge_per_side_bps" not in scenario.params
+
+    def test_cost20bps_rt_charges_what_the_pilot_literals_charged(self) -> None:
+        """Pins the equivalence the sourcing remediation rests on.
+
+        The pilots hardcoded ``COST_BPS_RT = 20.0``; resolving this alias must
+        yield the identical magnitude, so replacing the literals moves only
+        where the number is read from, never what it is.
+        """
+        alias = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("cost20bps_rt")
+        long_only = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_long_only_v1")
+        assert alias.params["round_trip_bps"] == 20.0
+        assert alias.params["round_trip_bps"] == long_only.params["round_trip_bps"]
+
     def test_single_name_ts_realistic_costs(self) -> None:
         """TradeStation single-name equity: observed ~2-6 bps RT, base = 6 (conservative)."""
         opt = INTRADAY_CAMPAIGN_COST_BOOK_V1.resolve("single_name_us_ts_optimistic_v1")
