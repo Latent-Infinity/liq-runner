@@ -224,6 +224,22 @@ INTRADAY_CAMPAIGN_COST_BOOK_V1 = CostBook.from_scenarios(
             spread_table="fixed_spread_table_v1",
             spread_multiplier=2.0,
         ),
+        # Venue identity, measured rather than assumed: the `binance_spot`
+        # dataset this scenario prices holds **Binance.US** bars, not
+        # Binance.com. Four partitions of the on-disk store -- two symbols,
+        # four years, 11,520 minutes -- match a live `api.binance.us` pull at
+        # 100.00% on close and volume, and `api.binance.com` returns HTTP 451
+        # from this environment. The description below therefore names a venue
+        # that is not the one on disk.
+        #
+        # The scenario id and its numbers are deliberately unchanged:
+        # `binance_spot_base_v1` is cited by name in two frozen
+        # pre-registrations, so it is annotated rather than corrected.
+        # Whether 2 bps maker is honest on a surface where 4-79% of 1-minute
+        # bars carry zero volume is an open question for whoever owns this
+        # book; it is recorded, not decided, in
+        # `liq-docs/plans/oracle-binance-us-market-identity-2026-09-24.md`
+        # (sections 5(i) and 7).
         _scenario(
             "binance_spot_base_v1",
             "binance_spot",
