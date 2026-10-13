@@ -66,6 +66,7 @@ addopts = "-ra -q --cov=liq.runner --cov-report=term-missing --cov-fail-under=90
 [tool.coverage.run]
 source = ["src/liq/runner"]
 branch = true
+patch = ["subprocess"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -73,7 +74,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
     "raise NotImplementedError",
-    "\\.\\.\\.",
+    "^\\s*\\.\\.\\.\\s*$",
     "pass",
 ]
 
